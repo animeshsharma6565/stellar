@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layers, Plus, ArrowRight, CheckCircle, Clock, X } from 'lucide-react';
 import { STELLAR_CONFIG } from '@/config/contracts';
 import { ErrorType } from '@/core/handlers/ErrorModal';
 import { StakingStrategy } from '@/types';
+import {
+  fetchStrategy,
+  approveVaultAllowance,
+  initiateStaking,
+  registerStrategy,
+  ContractCallError,
+} from '@/utils/sorobanClient';
 
 interface StrategyExplorerProps {
   currentAddress: string | null;
@@ -12,90 +19,128 @@ interface StrategyExplorerProps {
   onSubscribed: () => void;
 }
 
+const DESCRIPTIONS: Record<number, { description: string; features: string[] }> = {
+  1: {
+    description: 'High frequency testnet yield strategy with a 60-second checkpoint maturity.',
+    features: [
+      'Maturity interval: 60s rapid testing',
+      'Direct smart contract authorization',
+      'Pause & resume mechanisms',
+      'Instant liquidity settlement',
+    ],
+  },
+  2: {
+    description: 'Medium duration stable liquidity aggregation vault paying yield in syUSD.',
+    features: [
+      'Maturity interval: 300s testing cycle',
+      'Verified on-chain receipt logs',
+      'Non-custodial vault mechanics',
+      'Automatic checkpoint compounding',
+    ],
+  },
+  3: {
+    description: 'Long-term enterprise-grade yield aggregator running on Soroban.',
+    features: [
+      'Maturity interval: 1-hour locked cycles',
+      'Priority execution queue routing',
+      'Decentralized accounting audits',
+      'Zero admin platform lock-in',
+    ],
+  },
+};
+
+const KNOWN_STRATEGY_IDS = [1, 2, 3];
+
 export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
   currentAddress,
   onError,
   onSubscribed,
 }) => {
-  const [strategies, setStrategies] = useState<StakingStrategy[]>([
-    {
-      id: 1,
-      name: 'DeFi Alpha Pool',
-      operator: STELLAR_CONFIG.demoAccounts.operator,
-      apyBps: 800, // 8%
-      lockupSeconds: 60,
-      description: 'High frequency testnet yield strategy with a 60-second checkpoint maturity.',
-      features: [
-        'Maturity interval: 60s rapid testing',
-        'Direct smart contract authorization',
-        'Pause & resume mechanisms',
-        'Instant liquidity settlement',
-      ],
-    },
-    {
-      id: 2,
-      name: 'Stellar Liquid Vault',
-      operator: STELLAR_CONFIG.demoAccounts.operator,
-      apyBps: 1200, // 12%
-      lockupSeconds: 300,
-      description: 'Medium duration stable liquidity aggregation vault paying yield in syUSD.',
-      features: [
-        'Maturity interval: 300s testing cycle',
-        'Verified on-chain receipt logs',
-        'Non-custodial vault mechanics',
-        'Automatic checkpoint compounding',
-      ],
-    },
-    {
-      id: 3,
-      name: 'Global Yield Core',
-      operator: STELLAR_CONFIG.demoAccounts.operator,
-      apyBps: 1500, // 15%
-      lockupSeconds: 3600,
-      description: 'Long-term enterprise-grade yield aggregator running on Soroban.',
-      features: [
-        'Maturity interval: 1-hour locked cycles',
-        'Priority execution queue routing',
-        'Decentralized accounting audits',
-        'Zero admin platform lock-in',
-      ],
-    },
-  ]);
-
+  const [strategies, setStrategies] = useState<StakingStrategy[]>([]);
   const [subscribingId, setSubscribingId] = useState<number | null>(null);
+  const [stakeAmount, setStakeAmount] = useState<string>('100');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newApy, setNewApy] = useState('10'); // 10%
   const [newLockup, setNewLockup] = useState('60'); // 60s
+  const [registering, setRegistering] = useState(false);
+
+  const operatorAddress = STELLAR_CONFIG.demoAccounts.operator;
+
+  const refresh = useCallback(async () => {
+    const loaded: StakingStrategy[] = [];
+    for (const id of KNOWN_STRATEGY_IDS) {
+      const onChain = await fetchStrategy(operatorAddress, id);
+      if (onChain && onChain.active) {
+        loaded.push({
+          id,
+          name: onChain.name,
+          operator: onChain.operator,
+          apyBps: onChain.apy_bps,
+          lockupSeconds: Number(onChain.lockup_seconds),
+          description: DESCRIPTIONS[id]?.description ?? 'On-chain yield strategy registered via YieldPoolManager.',
+          features: DESCRIPTIONS[id]?.features ?? ['Registered live on Stellar Testnet'],
+        });
+      }
+    }
+    setStrategies(loaded);
+  }, [operatorAddress]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const handleSubscribe = async (strategy: StakingStrategy) => {
     if (!currentAddress) {
       onError('NO_WALLET');
       return;
     }
+    const amount = parseFloat(stakeAmount);
+    if (isNaN(amount) || amount <= 0) {
+      onError('INSUFFICIENT_FUNDS', 'Enter a valid positive stake amount.');
+      return;
+    }
+
     setSubscribingId(strategy.id);
-    setTimeout(() => {
-      setSubscribingId(null);
+    try {
+      await approveVaultAllowance(currentAddress, amount);
+      await initiateStaking(currentAddress, strategy.operator, strategy.id, amount);
       onSubscribed();
-    }, 1000);
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else if (code === 'INSUFFICIENT_FUNDS') onError('INSUFFICIENT_FUNDS', 'Wallet balance or allowance too low for this stake amount.');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Staking transaction failed on-chain.');
+    } finally {
+      setSubscribingId(null);
+    }
   };
 
-  const handleCreateStrategy = (e: React.FormEvent) => {
+  const handleCreateStrategy = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || !currentAddress) return;
     const apyPct = parseFloat(newApy) || 10;
-    const newStrategy: StakingStrategy = {
-      id: strategies.length + 1,
-      name: newName,
-      operator: currentAddress || STELLAR_CONFIG.demoAccounts.operator,
-      apyBps: Math.round(apyPct * 100),
-      lockupSeconds: parseInt(newLockup) || 60,
-      description: 'Custom yield strategy created on Stellar Testnet.',
-      features: ['Automated interval collection', 'Soroban smart contract safety'],
-    };
-    setStrategies([...strategies, newStrategy]);
-    setShowCreateModal(false);
-    setNewName('');
+    const nextId = strategies.length > 0 ? Math.max(...strategies.map((s) => s.id)) + 1 : 1;
+
+    setRegistering(true);
+    try {
+      await registerStrategy(
+        currentAddress,
+        nextId,
+        newName,
+        Math.round(apyPct * 100),
+        parseInt(newLockup) || 60
+      );
+      setShowCreateModal(false);
+      setNewName('');
+      await refresh();
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Strategy registration failed on-chain.');
+    } finally {
+      setRegistering(false);
+    }
   };
 
   return (
@@ -161,17 +206,32 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
               </div>
             </div>
 
-            <button
-              onClick={() => handleSubscribe(strat)}
-              disabled={subscribingId === strat.id}
-              className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-colors"
-            >
-              <span>{subscribingId === strat.id ? 'AUTHORIZING...' : 'STAKE INTO POOL'}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="space-y-2">
+              <input
+                type="number"
+                value={stakeAmount}
+                onChange={(e) => setStakeAmount(e.target.value)}
+                placeholder="Amount syUSD"
+                className="w-full px-3 py-2 border border-slate-200 focus:outline-none focus:border-slate-800 text-xs font-mono text-slate-800 bg-white"
+              />
+              <button
+                onClick={() => handleSubscribe(strat)}
+                disabled={subscribingId === strat.id}
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-colors"
+              >
+                <span>{subscribingId === strat.id ? 'AUTHORIZING...' : 'STAKE INTO POOL'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ))}
       </div>
+
+      {strategies.length === 0 && (
+        <div className="p-8 bg-white border border-slate-200 text-center text-xs font-mono text-slate-400">
+          Loading strategies from YieldPoolManager on Stellar Testnet…
+        </div>
+      )}
 
       {/* Register Strategy Modal */}
       {showCreateModal && (
@@ -228,9 +288,10 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 px-4 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-colors"
+                  disabled={registering}
+                  className="flex-1 py-2.5 px-4 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-colors disabled:opacity-50"
                 >
-                  Publish Strategy
+                  {registering ? 'Publishing...' : 'Publish Strategy'}
                 </button>
                 <button
                   type="button"

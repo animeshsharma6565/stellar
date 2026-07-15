@@ -1,10 +1,19 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, Pause, Play, Trash2, Plus, ExternalLink, ArrowRight, Zap, Shield } from 'lucide-react';
 import { STELLAR_CONFIG } from '@/config/contracts';
 import { ErrorType } from '@/core/handlers/ErrorModal';
 import { StakingPositionRecord } from '@/types';
+import {
+  fetchPosition,
+  fetchRecentEvents,
+  pausePosition,
+  resumePosition,
+  terminatePosition,
+  ContractCallError,
+  OnChainEvent,
+} from '@/utils/sorobanClient';
 
 interface StakingDashboardProps {
   currentAddress: string | null;
@@ -12,112 +21,115 @@ interface StakingDashboardProps {
   onExploreStrategies: () => void;
 }
 
-interface EventLog {
-  id: string;
-  time: string;
-  contract: string;
-  topic: string;
-  data: string;
-}
+const STRATEGY_NAMES: Record<number, string> = {
+  1: 'DeFi Alpha Pool',
+  2: 'Stellar Liquid Vault',
+  3: 'Global Yield Core',
+};
+
+const STRATEGY_APY: Record<string, number> = {
+  'DeFi Alpha Pool': 800,
+  'Stellar Liquid Vault': 1200,
+  'Global Yield Core': 1500,
+};
 
 export const StakingDashboard: React.FC<StakingDashboardProps> = ({
   currentAddress,
   onError,
   onExploreStrategies,
 }) => {
-  const [positions, setPositions] = useState<StakingPositionRecord[]>([
-    {
-      id: 'pos-1',
-      strategyName: 'DeFi Alpha Pool',
-      operator: STELLAR_CONFIG.demoAccounts.operator,
-      principalAmount: 1000,
-      lockupSeconds: 60, // 60s for rapid test
-      lastCheckpointTimestamp: Math.floor(Date.now() / 1000) - 30, // 30s ago
-      status: 'Active',
-      initiatedTimestamp: Math.floor(Date.now() / 1000) - 300,
-    },
-    {
-      id: 'pos-2',
-      strategyName: 'Stellar Liquid Vault',
-      operator: STELLAR_CONFIG.demoAccounts.operator,
-      principalAmount: 2500,
-      lockupSeconds: 300, // 5 mins
-      lastCheckpointTimestamp: Math.floor(Date.now() / 1000) - 120, // 120s ago
-      status: 'Active',
-      initiatedTimestamp: Math.floor(Date.now() / 1000) - 1000,
-    },
-  ]);
+  // On-chain positions are seeded under the fixed staker demo identity for this testnet build,
+  // so reads always target that address; writes sign with whichever wallet is actually connected.
+  const stakerAddress = STELLAR_CONFIG.demoAccounts.staker;
+  const operatorAddress = STELLAR_CONFIG.demoAccounts.operator;
+  const signerAddress = currentAddress || STELLAR_CONFIG.demoAccounts.staker;
 
-  const [eventLogs, setEventLogs] = useState<EventLog[]>([
-    {
-      id: 'evt-1',
-      time: new Date(Date.now() - 300000).toLocaleTimeString(),
-      contract: 'CBW5...2H2',
-      topic: 'strategy',
-      data: `[id: 1, operator: GBJV...HIZ, APY: 800bps]`,
-    },
-    {
-      id: 'evt-2',
-      time: new Date(Date.now() - 250000).toLocaleTimeString(),
-      contract: 'CBW5...2H2',
-      topic: 'stake',
-      data: `[staker: GDL7...7U, amount: 1000 syUSD]`,
-    },
-  ]);
-
+  const [positions, setPositions] = useState<StakingPositionRecord[]>([]);
+  const [eventLogs, setEventLogs] = useState<OnChainEvent[]>([]);
   const [now, setNow] = useState<number>(Math.floor(Date.now() / 1000));
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Live timer for general lockup checks
+  const refresh = useCallback(async () => {
+    const pos = await fetchPosition(stakerAddress, operatorAddress);
+    if (pos) {
+      setPositions([
+        {
+          id: `${pos.staker}-${pos.operator}`,
+          strategyName: STRATEGY_NAMES[pos.strategy_id] ?? `Strategy #${pos.strategy_id}`,
+          operator: pos.operator,
+          principalAmount: Number(pos.principal_amount) / 10 ** STELLAR_CONFIG.tokenDecimals,
+          lockupSeconds: Number(pos.min_duration),
+          lastCheckpointTimestamp: Number(pos.last_checkpoint_timestamp),
+          status: (pos.status?.tag ?? 'Active') as StakingPositionRecord['status'],
+          initiatedTimestamp: Number(pos.initiated_at),
+        },
+      ]);
+    } else {
+      setPositions([]);
+    }
+
+    const events = await fetchRecentEvents(12);
+    setEventLogs(events);
+  }, [stakerAddress, operatorAddress]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Live timer for general lockup checks; polls real on-chain events/positions every 15s
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Math.floor(Date.now() / 1000));
     }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const addEventLog = (topic: string, data: string) => {
-    const newLog: EventLog = {
-      id: `evt-${Date.now()}`,
-      time: new Date().toLocaleTimeString(),
-      contract: 'CBW5...2H2',
-      topic,
-      data,
+    const poll = setInterval(() => {
+      refresh();
+    }, 15000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(poll);
     };
-    setEventLogs((prev) => [newLog, ...prev]);
-  };
+  }, [refresh]);
 
   const handlePause = async (posId: string) => {
     setActionLoading(posId);
-    setTimeout(() => {
-      setPositions((prev) =>
-        prev.map((p) => (p.id === posId ? { ...p, status: 'Paused' } : p))
-      );
-      addEventLog('status', `[staker: GDL7...7U, status: Paused]`);
+    try {
+      await pausePosition(signerAddress, operatorAddress);
+      await refresh();
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Pause transaction failed on-chain.');
+    } finally {
       setActionLoading(null);
-    }, 600);
+    }
   };
 
   const handleResume = async (posId: string) => {
     setActionLoading(posId);
-    setTimeout(() => {
-      setPositions((prev) =>
-        prev.map((p) => (p.id === posId ? { ...p, status: 'Active' } : p))
-      );
-      addEventLog('status', `[staker: GDL7...7U, status: Active]`);
+    try {
+      await resumePosition(signerAddress, operatorAddress);
+      await refresh();
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Resume transaction failed on-chain.');
+    } finally {
       setActionLoading(null);
-    }, 600);
+    }
   };
 
   const handleTerminate = async (posId: string) => {
     setActionLoading(posId);
-    setTimeout(() => {
-      setPositions((prev) =>
-        prev.map((p) => (p.id === posId ? { ...p, status: 'Terminated' } : p))
-      );
-      addEventLog('status', `[staker: GDL7...7U, status: Terminated]`);
+    try {
+      await terminatePosition(signerAddress, operatorAddress);
+      await refresh();
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Unstake transaction failed on-chain.');
+    } finally {
       setActionLoading(null);
-    }, 600);
+    }
   };
 
   const getLockupProgress = (lastCheckpoint: number, lockup: number) => {
@@ -168,7 +180,7 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
           const progress = getLockupProgress(pos.lastCheckpointTimestamp, pos.lockupSeconds);
           const isPaused = pos.status === 'Paused';
           const isTerminated = pos.status === 'Terminated';
-          const apyBps = pos.id === 'pos-1' ? 800 : 1200; // 8% or 12%
+          const apyBps = STRATEGY_APY[pos.strategyName] ?? 800;
 
           return (
             <div

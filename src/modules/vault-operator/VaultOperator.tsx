@@ -1,9 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Vault, TrendingUp, Download, Zap, Users, CheckCircle, ExternalLink, Clock, ShieldCheck, AlertCircle } from 'lucide-react';
 import { STELLAR_CONFIG } from '@/config/contracts';
 import { ErrorType } from '@/core/handlers/ErrorModal';
+import {
+  fetchVaultBalance,
+  fetchTotalYieldAggregated,
+  fetchPosition,
+  runCheckpoint,
+  operatorWithdraw,
+  ContractCallError,
+} from '@/utils/sorobanClient';
 
 interface DepositorRow {
   stakerAddress: string;
@@ -19,34 +27,59 @@ interface VaultOperatorProps {
   onError: (type: ErrorType, msg?: string) => void;
 }
 
+const TRACKED_STAKERS = [STELLAR_CONFIG.demoAccounts.staker];
+const STRATEGY_NAMES: Record<number, string> = {
+  1: 'DeFi Alpha Pool',
+  2: 'Stellar Liquid Vault',
+  3: 'Global Yield Core',
+};
+
 export const VaultOperator: React.FC<VaultOperatorProps> = ({
   currentAddress,
   onError,
 }) => {
-  const [vaultBalance, setVaultBalance] = useState<number>(2500); // syUSD
-  const [totalYieldAggregated, setTotalYieldAggregated] = useState<number>(5000);
+  const [vaultBalance, setVaultBalance] = useState<number>(0);
+  const [totalYieldAggregated, setTotalYieldAggregated] = useState<number>(0);
   const [withdrawAmount, setWithdrawAmount] = useState<string>('500');
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  const [lastTxHash, setLastTxHash] = useState<string | null>(STELLAR_CONFIG.hashes.checkpointTx);
+  const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+  const [depositors, setDepositors] = useState<DepositorRow[]>([]);
 
-  const [depositors, setDepositors] = useState<DepositorRow[]>([
-    {
-      stakerAddress: STELLAR_CONFIG.demoAccounts.staker,
-      strategyName: 'DeFi Alpha Pool',
-      amount: 1000,
-      lockupSeconds: 60,
-      lastCheckpointTimestamp: Math.floor(Date.now() / 1000) - 75, // Overdue/Checkpoint Available!
-      status: 'Active',
-    },
-    {
-      stakerAddress: 'GDX7...4K9Q',
-      strategyName: 'Stellar Liquid Vault',
-      amount: 2500,
-      lockupSeconds: 300,
-      lastCheckpointTimestamp: Math.floor(Date.now() / 1000) - 100, // Locked
-      status: 'Active',
-    },
-  ]);
+  // On-chain state (strategies, positions, vault balances) is seeded under the fixed operator
+  // demo identity for this testnet build, so reads always target that address regardless of
+  // which wallet is connected. Writes below sign with whichever wallet is actually connected —
+  // Soroban's require_auth() will correctly reject a signer that isn't the real operator.
+  const operatorAddress = STELLAR_CONFIG.demoAccounts.operator;
+  const signerAddress = currentAddress || STELLAR_CONFIG.demoAccounts.operator;
+
+  const refresh = useCallback(async () => {
+    const [balance, totalYield] = await Promise.all([
+      fetchVaultBalance(operatorAddress),
+      fetchTotalYieldAggregated(operatorAddress),
+    ]);
+    setVaultBalance(balance);
+    setTotalYieldAggregated(totalYield);
+
+    const rows: DepositorRow[] = [];
+    for (const stakerAddr of TRACKED_STAKERS) {
+      const pos = await fetchPosition(stakerAddr, operatorAddress);
+      if (pos) {
+        rows.push({
+          stakerAddress: stakerAddr,
+          strategyName: STRATEGY_NAMES[pos.strategy_id] ?? `Strategy #${pos.strategy_id}`,
+          amount: Number(pos.principal_amount) / 10 ** STELLAR_CONFIG.tokenDecimals,
+          lockupSeconds: Number(pos.min_duration),
+          lastCheckpointTimestamp: Number(pos.last_checkpoint_timestamp),
+          status: (pos.status?.tag ?? 'Active') as DepositorRow['status'],
+        });
+      }
+    }
+    setDepositors(rows);
+  }, [operatorAddress]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const now = Math.floor(Date.now() / 1000);
 
@@ -58,19 +91,18 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
     }
 
     setLoadingAction(`collect-${stakerAddr}`);
-    setTimeout(() => {
-      setVaultBalance((prev) => prev + amount);
-      setTotalYieldAggregated((prev) => prev + amount);
-      setDepositors((prev) =>
-        prev.map((d) =>
-          d.stakerAddress === stakerAddr
-            ? { ...d, lastCheckpointTimestamp: Math.floor(Date.now() / 1000) }
-            : d
-        )
-      );
-      setLastTxHash(STELLAR_CONFIG.hashes.checkpointTx);
+    try {
+      const result = await runCheckpoint(signerAddress, stakerAddr);
+      setLastTxHash(result.hash);
+      await refresh();
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else if (code === 'CYCLE_NOT_DUE') onError('CYCLE_NOT_DUE');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Checkpoint transaction failed on-chain.');
+    } finally {
       setLoadingAction(null);
-    }, 1000);
+    }
   };
 
   const handleWithdraw = async () => {
@@ -85,11 +117,17 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
     }
 
     setLoadingAction('withdraw');
-    setTimeout(() => {
-      setVaultBalance((prev) => prev - val);
-      setLastTxHash(STELLAR_CONFIG.hashes.operatorWithdrawTx);
+    try {
+      const result = await operatorWithdraw(signerAddress, val);
+      setLastTxHash(result.hash);
+      await refresh();
+    } catch (err: any) {
+      const code = err instanceof ContractCallError ? err.message : '';
+      if (code === 'SIGNATURE_REJECTED') onError('SIGNATURE_REJECTED');
+      else onError('INSUFFICIENT_FUNDS', err?.message ?? 'Withdrawal transaction failed on-chain.');
+    } finally {
       setLoadingAction(null);
-    }, 1000);
+    }
   };
 
   const truncate = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;

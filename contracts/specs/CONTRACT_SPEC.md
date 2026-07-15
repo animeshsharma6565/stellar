@@ -1,11 +1,11 @@
-# SubScript Smart Contract Architecture Specification
+# SolarYield Smart Contract Architecture Specification
 
 ## 1. Overview
-SubScript provides a decentralized automated recurring billing engine on Stellar Soroban Testnet.
+SolarYield provides a decentralized yield staking and liquidity vault engine on Stellar Soroban Testnet.
 
 ## 2. Contracts & Methods
 
-### `token`
+### `reward_token`
 - `initialize(admin: Address, decimals: u32, name: String, symbol: String)`
 - `mint(to: Address, amount: i128)`
 - `balance(id: Address) -> i128`
@@ -14,19 +14,21 @@ SubScript provides a decentralized automated recurring billing engine on Stellar
 - `allowance(from: Address, spender: Address) -> i128`
 - `transfer_from(spender: Address, from: Address, to: Address, amount: i128)`
 
-### `subscription_manager`
+### `yield_pool_manager`
 - `initialize(admin: Address)`
 - `set_vault(vault: Address)`
-- `create_plan(merchant: Address, plan_id: u32, name: String, amount: i128, interval_seconds: u64)`
-- `subscribe(subscriber: Address, merchant: Address, plan_id: u32)`
-- `pause_subscription(subscriber: Address, merchant: Address)`
-- `resume_subscription(subscriber: Address, merchant: Address)`
-- `cancel_subscription(subscriber: Address, merchant: Address)`
-- `verify_and_update_billing(caller: Address, subscriber: Address, merchant: Address) -> (i128, Address)`
+- `register_strategy(operator: Address, strategy_id: u32, name: String, apy_bps: u32, lockup_seconds: u64)`
+- `get_strategy(operator: Address, strategy_id: u32) -> Option<YieldStrategy>`
+- `initiate_staking(staker: Address, operator: Address, strategy_id: u32, amount: i128)`
+- `pause_position(staker: Address, operator: Address)`
+- `resume_position(staker: Address, operator: Address)`
+- `terminate_position(staker: Address, operator: Address)`
+- `checkpoint_and_update_rewards(caller: Address, staker: Address, operator: Address) -> (i128, Address)`
+- `get_position(staker: Address, operator: Address) -> Option<StakingPosition>`
 
-### `merchant_vault`
-- `initialize(admin: Address, token_contract: Address, sub_manager_contract: Address)`
-- `collect_subscription(merchant: Address, subscriber: Address) -> i128`
-- `withdraw(merchant: Address, amount: i128)`
-- `get_vault_balance(merchant: Address) -> i128`
-- `get_total_collected(merchant: Address) -> i128`
+### `liquidity_vault`
+- `initialize(admin: Address, token_contract: Address, yield_manager_contract: Address)`
+- `aggregate_yield_checkpoint(operator: Address, staker: Address) -> i128`
+- `operator_withdraw(operator: Address, amount: i128)`
+- `get_vault_balance(operator: Address) -> i128`
+- `get_total_yield_aggregated(operator: Address) -> i128`

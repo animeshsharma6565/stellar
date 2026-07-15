@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, Sparkles, ExternalLink, Zap, AlertCircle, ArrowUpRight } from 'lucide-react';
 import { WalletConnect } from '@/core/handlers/WalletConnect';
 import { StakingDashboard } from '@/modules/staking-dashboard/StakingDashboard';
@@ -8,6 +8,7 @@ import { VaultOperator } from '@/modules/vault-operator/VaultOperator';
 import { StrategyExplorer } from '@/modules/strategy-explorer/StrategyExplorer';
 import { ErrorModal, ErrorType } from '@/core/handlers/ErrorModal';
 import { STELLAR_CONFIG } from '@/config/contracts';
+import { fetchTokenBalance } from '@/utils/sorobanClient';
 
 export default function Home() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(
@@ -16,12 +17,22 @@ export default function Home() {
   const [activeRole, setActiveRole] = useState<'staker' | 'operator' | 'explorer'>('staker');
   const [errorType, setErrorType] = useState<ErrorType>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [tokenBalance, setTokenBalance] = useState<string>('9500.00');
+  const [tokenBalance, setTokenBalance] = useState<string>('0.00');
 
   const triggerError = (type: ErrorType, msg?: string) => {
     setErrorType(type);
     if (msg) setErrorMessage(msg);
   };
+
+  const refreshBalance = useCallback(async () => {
+    if (!currentAddress) return;
+    const bal = await fetchTokenBalance(currentAddress);
+    setTokenBalance(bal.toFixed(2));
+  }, [currentAddress]);
+
+  useEffect(() => {
+    refreshBalance();
+  }, [refreshBalance]);
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-800 flex flex-col justify-between selection:bg-slate-950 selection:text-white font-sans antialiased">
