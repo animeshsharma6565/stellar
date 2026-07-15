@@ -1,4 +1,4 @@
-name: SubScript CI Pipeline
+name: SolarYield CI Pipeline
 
 on:
   push:

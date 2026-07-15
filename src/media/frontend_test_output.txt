@@ -1,0 +1,20 @@
+
+> subscript-frontend@0.1.0 test
+> node scripts/run-frontend-tests.js
+
+[1m====================================================
+Running SolarYield Frontend Math & Utility Tests...
+====================================================[0m
+
+[32m✔ PASS: calculateYield returns mathematically precise returns for 1 year (80 syUSD)[0m
+[32m✔ PASS: calculateYield returns precise microsecond offsets for high-frequency ticks (0.001141552511415525 syUSD)[0m
+[32m✔ PASS: formatAddress correctly truncates long 56-character Soroban addresses (CBW5MD...V2H2)[0m
+[32m✔ PASS: getLockupProgress evaluates matured checkpoint lockup successfully[0m
+[32m✔ PASS: getLockupProgress blocks checkpoint collection when locks remain active[0m
+
+[1m====================================================
+Test Execution Summary:
+  Passed: [32m5[0m
+  Failed: [0m0[0m
+====================================================[0m
+

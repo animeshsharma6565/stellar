@@ -1,0 +1,15 @@
+[package]
+name = "liquidity-vault"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+yield-pool-manager = { package = "yield-pool-manager", path = "../yield_pool_manager" }
+reward-token = { package = "reward-token", path = "../reward_token" }

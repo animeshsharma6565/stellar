@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "npx @opennextjs/cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node scripts/run-frontend-tests.js"
   },
   "dependencies": {
     "@stellar/freighter-api": "^2.0.0",

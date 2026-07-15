@@ -1,0 +1,45 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/liquidity_vault-c75e4657cfa7819c)
+
+running 2 tests
+test test::test_liquidity_vault_checkpoint_and_withdraw_flow ... ok
+test test::test_operator_withdraw_exceeds_balance - should panic ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running unittests src/lib.rs (target/debug/deps/reward_token-6ca71ca1239455bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/yield_pool_manager-a55b0e2135263dd3)
+
+running 6 tests
+test test::test_terminate_position ... ok
+test test::test_register_strategy_and_stake ... ok
+test test::test_pause_and_resume_position ... ok
+test test::test_checkpoint_on_paused_position_fails - should panic ... ok
+test test::test_checkpoint_on_terminated_position_fails - should panic ... ok
+test test::test_checkpoint_interval_enforcement_premature - should panic ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+   Doc-tests liquidity_vault
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests reward_token
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests yield_pool_manager
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

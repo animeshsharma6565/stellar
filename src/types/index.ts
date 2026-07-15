@@ -1,27 +1,27 @@
-export interface Plan {
+export interface StakingStrategy {
   id: number;
   name: string;
-  merchant: string;
-  amount: number;
-  intervalSeconds: number;
+  operator: string;
+  apyBps: number; // APY in basis points (e.g. 800)
+  lockupSeconds: number;
   description: string;
   features: string[];
 }
 
-export interface SubscriptionRecord {
+export interface StakingPositionRecord {
   id: string;
-  planName: string;
-  merchant: string;
-  amount: number;
-  intervalSeconds: number;
-  lastPaidTimestamp: number;
-  status: 'Active' | 'Paused' | 'Cancelled';
-  createdTimestamp: number;
+  strategyName: string;
+  operator: string;
+  principalAmount: number;
+  lockupSeconds: number;
+  lastCheckpointTimestamp: number;
+  status: 'Active' | 'Paused' | 'Terminated';
+  initiatedTimestamp: number;
 }
 
-export interface MerchantVaultState {
+export interface LiquidityVaultState {
   vaultAddress: string;
   vaultBalance: number;
-  totalCollected: number;
-  activeSubscribersCount: number;
+  totalYieldAggregated: number;
+  activeStakersCount: number;
 }

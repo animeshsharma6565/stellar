@@ -1,22 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, CreditCard, Vault, Layers, Sparkles, ExternalLink, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
-import { WalletConnect } from '@/components/WalletConnect';
-import { SubscriberDashboard } from '@/components/SubscriberDashboard';
-import { MerchantDashboard } from '@/components/MerchantDashboard';
-import { PlanExplorer } from '@/components/PlanExplorer';
-import { ErrorModal, ErrorType } from '@/components/ErrorModal';
+import { Shield, Sparkles, ExternalLink, Zap, AlertCircle, ArrowUpRight } from 'lucide-react';
+import { WalletConnect } from '@/core/handlers/WalletConnect';
+import { StakingDashboard } from '@/modules/staking-dashboard/StakingDashboard';
+import { VaultOperator } from '@/modules/vault-operator/VaultOperator';
+import { StrategyExplorer } from '@/modules/strategy-explorer/StrategyExplorer';
+import { ErrorModal, ErrorType } from '@/core/handlers/ErrorModal';
 import { STELLAR_CONFIG } from '@/config/contracts';
 
 export default function Home() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(
-    STELLAR_CONFIG.demoAccounts.subscriber
+    STELLAR_CONFIG.demoAccounts.staker
   );
-  const [activeRole, setActiveRole] = useState<'subscriber' | 'merchant' | 'explorer'>('subscriber');
+  const [activeRole, setActiveRole] = useState<'staker' | 'operator' | 'explorer'>('staker');
   const [errorType, setErrorType] = useState<ErrorType>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [tokenBalance, setTokenBalance] = useState<string>('950');
+  const [tokenBalance, setTokenBalance] = useState<string>('9500.00');
 
   const triggerError = (type: ErrorType, msg?: string) => {
     setErrorType(type);
@@ -24,27 +24,27 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+    <main className="min-h-screen bg-[#fafafa] text-slate-800 flex flex-col justify-between selection:bg-slate-950 selection:text-white font-sans antialiased">
       {/* Navbar */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0b0f19]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          {/* Logo */}
+          {/* Logo / Branding */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <Zap className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-slate-950 flex items-center justify-center">
+              <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white">SubScript</span>
-                <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-mono font-bold">
-                  LEVEL 3
+                <span className="text-lg font-bold tracking-tight text-slate-950 font-mono">SolarYield</span>
+                <span className="px-2 py-0.5 rounded-none bg-slate-100 text-slate-700 border border-slate-200 text-[9px] font-mono font-bold uppercase tracking-wider">
+                  Level 3
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">Decentralized Recurring Billing on Soroban</p>
+              <p className="text-[10px] text-slate-400 font-mono">Stellar Yield Staking & Liquidity Vaults</p>
             </div>
           </div>
 
-          {/* Wallet Connect & Navigation */}
+          {/* Wallet Connect & Role Navigation */}
           <WalletConnect
             currentAddress={currentAddress}
             setCurrentAddress={setCurrentAddress}
@@ -57,105 +57,105 @@ export default function Home() {
       </header>
 
       {/* Main Content Body */}
-      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
+      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1">
         {/* Error Simulation Helper Ribbon */}
-        <div className="mb-6 p-4 rounded-xl glass-panel border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 text-slate-400">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span className="font-semibold text-slate-200">Interactive Error Handler Playground:</span>
-            <span className="hidden md:inline">Test required Level 3 dApp error state feedback</span>
+        <div className="mb-8 p-5 bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
+          <div className="flex items-center gap-2 text-slate-500">
+            <Sparkles className="w-4 h-4 text-slate-600 animate-pulse" />
+            <span className="font-bold text-slate-800">SIMULATOR CONTROLS:</span>
+            <span className="hidden md:inline">Test required Level 3 client-side exception states</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => triggerError('NO_WALLET')}
-              className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors font-medium"
+              className="px-3 py-1.5 border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-700 font-bold transition-colors"
             >
-              Simulate Missing Wallet
+              Missing Wallet
             </button>
             <button
               onClick={() =>
-                triggerError('SIGNATURE_REJECTED', 'User cancelled transaction signing request in Freighter.')
+                triggerError('SIGNATURE_REJECTED', 'Freighter Wallet transaction signing rejected by keysigner.')
               }
-              className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition-colors font-medium"
+              className="px-3 py-1.5 border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 font-bold transition-colors"
             >
-              Simulate Rejected Signature
+              Rejected Signature
             </button>
             <button
               onClick={() =>
                 triggerError(
                   'CYCLE_NOT_DUE',
-                  'Billing cycle interval not met: Next collection available in 14m 20s.'
+                  'Vesting checkpoint timestamp criteria not met: Maturity expected in 14m 20s.'
                 )
               }
-              className="px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors font-medium"
+              className="px-3 py-1.5 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold transition-colors"
             >
-              Simulate Cycle Not Due
+              Unexpired Lockup
             </button>
           </div>
         </div>
 
         {/* Dynamic View rendering */}
-        {activeRole === 'subscriber' && (
-          <SubscriberDashboard
+        {activeRole === 'staker' && (
+          <StakingDashboard
             currentAddress={currentAddress}
             onError={triggerError}
-            onExplorePlans={() => setActiveRole('explorer')}
+            onExploreStrategies={() => setActiveRole('explorer')}
           />
         )}
 
-        {activeRole === 'merchant' && (
-          <MerchantDashboard currentAddress={currentAddress} onError={triggerError} />
+        {activeRole === 'operator' && (
+          <VaultOperator currentAddress={currentAddress} onError={triggerError} />
         )}
 
         {activeRole === 'explorer' && (
-          <PlanExplorer
+          <StrategyExplorer
             currentAddress={currentAddress}
             onError={triggerError}
-            onSubscribed={() => setActiveRole('subscriber')}
+            onSubscribed={() => setActiveRole('staker')}
           />
         )}
       </div>
 
       {/* Footer */}
-      <footer className="w-full border-t border-slate-800/80 py-6 bg-[#0b0f19]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-mono">
+      <footer className="w-full border-t border-slate-200 py-8 bg-white text-[11px] font-mono text-slate-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span>SubScript dApp • Stellar Soroban Testnet</span>
+            <span>SolarYield Protocol • Stellar Soroban Testnet</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <a
-              href={`https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contracts.subscriptionManager}`}
+              href={`https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contracts.yieldManager}`}
               target="_blank"
               rel="noreferrer"
-              className="hover:text-indigo-400 hover:underline flex items-center gap-1"
+              className="hover:text-slate-800 flex items-center gap-1 hover:underline"
             >
-              <span>SubscriptionManager</span>
-              <ExternalLink className="w-3 h-3" />
+              <span>YieldManager</span>
+              <ArrowUpRight className="w-3 h-3 text-slate-400" />
             </a>
             <a
-              href={`https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contracts.merchantVault}`}
+              href={`https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contracts.liquidityVault}`}
               target="_blank"
               rel="noreferrer"
-              className="hover:text-indigo-400 hover:underline flex items-center gap-1"
+              className="hover:text-slate-800 flex items-center gap-1 hover:underline"
             >
-              <span>MerchantVault</span>
-              <ExternalLink className="w-3 h-3" />
+              <span>LiquidityVault</span>
+              <ArrowUpRight className="w-3 h-3 text-slate-400" />
             </a>
             <a
-              href={`https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contracts.token}`}
+              href={`https://stellar.expert/explorer/testnet/contract/${STELLAR_CONFIG.contracts.rewardToken}`}
               target="_blank"
               rel="noreferrer"
-              className="hover:text-indigo-400 hover:underline flex items-center gap-1"
+              className="hover:text-slate-800 flex items-center gap-1 hover:underline"
             >
-              <span>Token Contract</span>
-              <ExternalLink className="w-3 h-3" />
+              <span>RewardToken</span>
+              <ArrowUpRight className="w-3 h-3 text-slate-400" />
             </a>
           </div>
         </div>
       </footer>
 
-      {/* Error Modal */}
+      {/* Error Modal overlay */}
       <ErrorModal
         errorType={errorType}
         errorMessage={errorMessage}
