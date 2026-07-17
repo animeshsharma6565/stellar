@@ -1,0 +1,21 @@
+# Rust / Cargo
+/target
+Cargo.lock
+
+# Node / Next.js
+/node_modules
+/.next
+/out
+/build
+.env
+.env.local
+.env.production
+.env.development
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Stellar CLI deployment keys
+.stellar
+*.wasm
