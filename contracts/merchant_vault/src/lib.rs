@@ -1,7 +1,21 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
-use subscription_manager::SubscriptionManagerContractClient;
-use token::TokenContractClient;
+use soroban_sdk::{contract, contractclient, contractimpl, contracttype, token, Address, Env};
+
+pub mod sub_manager_interface {
+    use super::*;
+
+    #[contractclient(name = "SubscriptionManagerContractClient")]
+    pub trait SubscriptionManagerContract {
+        fn verify_and_update_billing(
+            e: &Env,
+            caller: &Address,
+            subscriber: &Address,
+            merchant: &Address,
+        ) -> (i128, Address);
+    }
+}
+
+use sub_manager_interface::SubscriptionManagerContractClient;
 
 #[contracttype]
 #[derive(Clone)]
@@ -51,7 +65,7 @@ impl MerchantVaultContract {
             .expect("token not set");
 
         let sub_client = SubscriptionManagerContractClient::new(&e, &sub_manager_addr);
-        let token_client = TokenContractClient::new(&e, &token_addr);
+        let token_client = token::Client::new(&e, &token_addr);
 
         let vault_address = e.current_contract_address();
 
@@ -98,11 +112,11 @@ impl MerchantVaultContract {
             .instance()
             .get(&DataKey::TokenContract)
             .expect("token not set");
-        let token_client = TokenContractClient::new(&e, &token_addr);
+        let token_client = token::Client::new(&e, &token_addr);
 
         let vault_address = e.current_contract_address();
 
-        // Deduct balance first (checks-effects-interactions pattern)
+        // Deduct balance first
         e.storage().persistent().set(&DataKey::MerchantBalance(merchant.clone()), &(balance - amount));
 
         // Transfer funds from vault to merchant
