@@ -1,14 +1,14 @@
 #![cfg(test)]
 
 use super::*;
+use ::token::{TokenContract, TokenContractClient};
 use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env, String};
 use subscription_manager::{SubscriptionManagerContract, SubscriptionManagerContractClient};
-use token::{TokenContract, TokenContractClient};
 
 #[test]
 fn test_merchant_vault_collect_and_withdraw_flow() {
     let env = Env::default();
-    env.mock_all_signatures();
+    env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let merchant = Address::generate(&env);
@@ -89,7 +89,7 @@ fn test_merchant_vault_collect_and_withdraw_flow() {
 #[should_panic(expected = "insufficient vault balance")]
 fn test_merchant_withdraw_exceeds_balance() {
     let env = Env::default();
-    env.mock_all_signatures();
+    env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let merchant = Address::generate(&env);

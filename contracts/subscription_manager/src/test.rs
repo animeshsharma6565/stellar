@@ -1,12 +1,12 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Env, String};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env, String};
 
 #[test]
 fn test_create_plan_and_subscribe() {
     let env = Env::default();
-    env.mock_all_signatures();
+    env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let merchant = Address::generate(&env);
@@ -38,7 +38,7 @@ fn test_create_plan_and_subscribe() {
 #[test]
 fn test_pause_and_resume_subscription() {
     let env = Env::default();
-    env.mock_all_signatures();
+    env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let merchant = Address::generate(&env);
@@ -68,7 +68,7 @@ fn test_pause_and_resume_subscription() {
 #[test]
 fn test_cancel_subscription() {
     let env = Env::default();
-    env.mock_all_signatures();
+    env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let merchant = Address::generate(&env);
@@ -92,7 +92,8 @@ fn test_cancel_subscription() {
 #[should_panic(expected = "billing cycle not due yet")]
 fn test_billing_interval_enforcement_premature() {
     let env = Env::default();
-    env.mock_all_signatures();
+    env.mock_all_auths();
+    env.ledger().with_mut(|l| l.timestamp = 1000);
 
     let admin = Address::generate(&env);
     let merchant = Address::generate(&env);
@@ -106,9 +107,53 @@ fn test_billing_interval_enforcement_premature() {
     client.create_plan(&merchant, &1, &plan_name, &50_0000000i128, &1000u64);
     client.subscribe(&subscriber, &merchant, &1);
 
-    // First billing call works
+    // First billing call works at timestamp 1000
     client.verify_and_update_billing(&merchant, &subscriber, &merchant);
 
-    // Immediate second billing call must fail because 1000s have not elapsed
+    // Immediate second billing call at timestamp 1000 must fail because 1000s have not elapsed
+    client.verify_and_update_billing(&merchant, &subscriber, &merchant);
+}
+
+#[test]
+#[should_panic(expected = "subscription is not active")]
+fn test_billing_on_paused_subscription_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let merchant = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+
+    let manager_id = env.register_contract(None, SubscriptionManagerContract);
+    let client = SubscriptionManagerContractClient::new(&env, &manager_id);
+
+    client.initialize(&admin);
+    let plan_name = String::from_str(&env, "Pausable Plan");
+    client.create_plan(&merchant, &1, &plan_name, &100_0000000i128, &60u64);
+    client.subscribe(&subscriber, &merchant, &1);
+
+    client.pause_subscription(&subscriber, &merchant);
+    client.verify_and_update_billing(&merchant, &subscriber, &merchant);
+}
+
+#[test]
+#[should_panic(expected = "subscription is not active")]
+fn test_billing_on_cancelled_subscription_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let merchant = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+
+    let manager_id = env.register_contract(None, SubscriptionManagerContract);
+    let client = SubscriptionManagerContractClient::new(&env, &manager_id);
+
+    client.initialize(&admin);
+    let plan_name = String::from_str(&env, "Cancellable Plan");
+    client.create_plan(&merchant, &1, &plan_name, &100_0000000i128, &60u64);
+    client.subscribe(&subscriber, &merchant, &1);
+
+    client.cancel_subscription(&subscriber, &merchant);
     client.verify_and_update_billing(&merchant, &subscriber, &merchant);
 }
