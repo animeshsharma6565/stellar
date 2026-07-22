@@ -1,0 +1,8 @@
+SubScript v1.0.0 Level 3 Release Summary
+----------------------------------------
+- Smart Contracts: 3 Soroban Contracts (token, subscription_manager, merchant_vault)
+- Unit Tests: 8 passing unit tests (cargo test)
+- Real Testnet Evidence: Live deployed contract addresses and 64-hex transaction hashes documented in README.md
+- Frontend: Next.js 14 App Router, TypeScript, Tailwind CSS, static export ('out')
+- Error Handling: 3 distinct error states (wallet missing, signature rejected, cycle not due / insufficient balance)
+- CI/CD: Fully functional GitHub Actions CI pipeline (.github/workflows/ci.yml)
