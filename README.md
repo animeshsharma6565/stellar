@@ -1,5 +1,8 @@
 # SubScript — Level 3 Decentralized Recurring Subscription & Automated Billing Management dApp
 
+[![CI Pipeline](https://github.com/animeshsharma6565/stellar/actions/workflows/ci.yml/badge.svg)](https://github.com/animeshsharma6565/stellar/actions/workflows/ci.yml)
+![Cloudflare Connected](https://img.shields.io/badge/Cloudflare%20Pages-Connected-orange?logo=cloudflare)
+
 **SubScript** is a decentralized recurring subscription and automated billing management dApp on **Stellar Testnet** designed for digital creators, SaaS platforms, and Web3 services. Users authorize recurring token payment streams that merchant vaults pull at fixed time intervals using Soroban inter-contract calls.
 
 ---
@@ -129,3 +132,5 @@ A GitHub Actions workflow is included in `.github/workflows/ci.yml`:
 - Runs `cargo test` across all workspace smart contracts.
 - Runs `cargo check` for compilation integrity.
 - Installs dependencies and runs `npm run build` to verify static export compatibility.
+
+<!-- Cache bust to update contributors -->

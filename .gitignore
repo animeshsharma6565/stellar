@@ -7,6 +7,10 @@
 /.next
 /out
 /build
+
+# Cloudflare / OpenNext
+/.open-next
+/.wrangler
 .env
 .env.local
 .env.production
