@@ -3,6 +3,8 @@
 [![CI Pipeline](https://github.com/animeshsharma6565/stellar/actions/workflows/ci.yml/badge.svg)](https://github.com/animeshsharma6565/stellar/actions/workflows/ci.yml)
 ![Cloudflare Connected](https://img.shields.io/badge/Cloudflare%20Pages-Connected-orange?logo=cloudflare)
 
+![CI Checks Passed](src/media/screenshot_ci_checks.png)
+
 **SubScript** is a decentralized recurring subscription and automated billing management dApp on **Stellar Testnet** designed for digital creators, SaaS platforms, and Web3 services. Users authorize recurring token payment streams that merchant vaults pull at fixed time intervals using Soroban inter-contract calls.
 
 ---
@@ -126,7 +128,22 @@ npm run build
 
 ---
 
-## 5. CI/CD Pipeline
+## 5. UI Previews & Demo Screenshots
+
+### Application Demo Recording
+![SubScript Demo Video](src/media/recording.gif)
+
+### Dashboard Views
+| Subscriber Portal | Merchant Revenue Vault |
+| :---: | :---: |
+| ![Subscriber Dashboard](src/media/IMG_4627.PNG) | ![Merchant Dashboard](src/media/IMG_4628.PNG) |
+
+### Handled Error States Playground
+![Error States Playground](src/media/screenshot_error.png)
+
+---
+
+## 6. CI/CD Pipeline
 
 A GitHub Actions workflow is included in `.github/workflows/ci.yml`:
 - Runs `cargo test` across all workspace smart contracts.
