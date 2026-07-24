@@ -355,3 +355,28 @@ export async function fetchRecentEvents(limit = 12): Promise<OnChainEvent[]> {
     return [];
   }
 }
+
+export async function getStrategies(): Promise<OnChainStrategy[]> {
+  const operator = STELLAR_CONFIG.demoAccounts.operator;
+  const strategies: OnChainStrategy[] = [];
+  for (const id of [1, 2]) {
+    const s = await fetchStrategy(operator, id);
+    if (s) {
+      strategies.push(s);
+    }
+  }
+  return strategies;
+}
+
+export async function getVaultBalance(): Promise<number> {
+  return fetchVaultBalance(STELLAR_CONFIG.demoAccounts.operator);
+}
+
+export async function getTotalYieldAggregated(): Promise<number> {
+  return fetchTotalYieldAggregated(STELLAR_CONFIG.demoAccounts.operator);
+}
+
+export async function getPosition(staker: string, operator: string): Promise<OnChainPosition | null> {
+  return fetchPosition(staker, operator);
+}
+

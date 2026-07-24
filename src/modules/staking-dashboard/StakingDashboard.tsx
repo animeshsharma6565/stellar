@@ -1,99 +1,107 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, Pause, Play, Trash2, Plus, ExternalLink, ArrowRight, Zap, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Clock, Pause, Play, Trash2, Plus, ExternalLink, Zap, Shield, HelpCircle } from 'lucide-react';
 import { STELLAR_CONFIG } from '@/config/contracts';
+import { getPosition, pausePosition, resumePosition, terminatePosition, ContractCallError } from '@/utils/sorobanClient';
 import { ErrorType } from '@/core/handlers/ErrorModal';
 import { StakingPositionRecord } from '@/types';
-import {
-  fetchPosition,
-  fetchRecentEvents,
-  pausePosition,
-  resumePosition,
-  terminatePosition,
-  ContractCallError,
-  OnChainEvent,
-} from '@/utils/sorobanClient';
 
 interface StakingDashboardProps {
-  currentAddress: string | null;
+  signerAddress: string;
   onError: (type: ErrorType, msg?: string) => void;
   onExploreStrategies: () => void;
 }
 
-const STRATEGY_NAMES: Record<number, string> = {
-  1: 'DeFi Alpha Pool',
-  2: 'Stellar Liquid Vault',
-  3: 'Global Yield Core',
-};
+interface EventLog {
+  id: string;
+  time: string;
+  contract: string;
+  topic: string;
+  data: string;
+}
 
 const STRATEGY_APY: Record<string, number> = {
-  'DeFi Alpha Pool': 800,
-  'Stellar Liquid Vault': 1200,
-  'Global Yield Core': 1500,
+  'DeFi Alpha Pool': 800, // 8.00%
+  'Stellar Liquid Vault': 1200, // 12.00%
 };
 
 export const StakingDashboard: React.FC<StakingDashboardProps> = ({
-  currentAddress,
+  signerAddress,
   onError,
   onExploreStrategies,
 }) => {
-  // On-chain positions are seeded under the fixed staker demo identity for this testnet build,
-  // so reads always target that address; writes sign with whichever wallet is actually connected.
-  const stakerAddress = STELLAR_CONFIG.demoAccounts.staker;
-  const operatorAddress = STELLAR_CONFIG.demoAccounts.operator;
-  const signerAddress = currentAddress || STELLAR_CONFIG.demoAccounts.staker;
-
   const [positions, setPositions] = useState<StakingPositionRecord[]>([]);
-  const [eventLogs, setEventLogs] = useState<OnChainEvent[]>([]);
+  const [eventLogs, setEventLogs] = useState<EventLog[]>([
+    {
+      id: 'evt-1',
+      time: new Date(Date.now() - 300000).toLocaleTimeString(),
+      contract: 'CBW5...2H2',
+      topic: 'strategy',
+      data: `[id: 1, operator: GBJV...HIZ, APY: 800bps]`,
+    },
+    {
+      id: 'evt-2',
+      time: new Date(Date.now() - 250000).toLocaleTimeString(),
+      contract: 'CBW5...2H2',
+      topic: 'stake',
+      data: `[staker: GDL7...7U, amount: 1000 syUSD]`,
+    },
+  ]);
+
   const [now, setNow] = useState<number>(Math.floor(Date.now() / 1000));
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    const pos = await fetchPosition(stakerAddress, operatorAddress);
-    if (pos) {
-      setPositions([
-        {
-          id: `${pos.staker}-${pos.operator}`,
-          strategyName: STRATEGY_NAMES[pos.strategy_id] ?? `Strategy #${pos.strategy_id}`,
-          operator: pos.operator,
-          principalAmount: Number(pos.principal_amount) / 10 ** STELLAR_CONFIG.tokenDecimals,
-          lockupSeconds: Number(pos.min_duration),
-          lastCheckpointTimestamp: Number(pos.last_checkpoint_timestamp),
-          status: (pos.status?.tag ?? 'Active') as StakingPositionRecord['status'],
-          initiatedTimestamp: Number(pos.initiated_at),
-        },
-      ]);
-    } else {
-      setPositions([]);
+  const addEventLog = (topic: string, data: string) => {
+    const newLog: EventLog = {
+      id: `evt-${Date.now()}`,
+      time: new Date().toLocaleTimeString(),
+      contract: 'CBW5...2H2',
+      topic,
+      data,
+    };
+    setEventLogs((prev) => [newLog, ...prev]);
+  };
+
+  const refresh = async () => {
+    const op = STELLAR_CONFIG.demoAccounts.operator;
+    const pos1 = await getPosition(signerAddress, op);
+    
+    const loaded: StakingPositionRecord[] = [];
+    if (pos1) {
+      loaded.push({
+        id: 'pos-1',
+        strategyName: 'DeFi Alpha Pool',
+        operator: op,
+        principalAmount: Number(pos1.principal_amount),
+        lockupSeconds: Number(pos1.min_duration),
+        lastCheckpointTimestamp: Number(pos1.last_checkpoint_timestamp),
+        status: (pos1.status?.tag === 'Paused' || pos1.status?.tag === 'Terminated') ? pos1.status.tag : 'Active',
+        initiatedTimestamp: Number(pos1.initiated_at),
+      });
     }
 
-    const events = await fetchRecentEvents(12);
-    setEventLogs(events);
-  }, [stakerAddress, operatorAddress]);
+    setPositions(loaded);
+  };
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [signerAddress]);
 
-  // Live timer for general lockup checks; polls real on-chain events/positions every 15s
+  // Live timer for general lockup checks
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(Math.floor(Date.now() / 1000));
     }, 1000);
-    const poll = setInterval(() => {
-      refresh();
-    }, 15000);
-    return () => {
-      clearInterval(timer);
-      clearInterval(poll);
-    };
-  }, [refresh]);
+    return () => clearInterval(timer);
+  }, []);
 
   const handlePause = async (posId: string) => {
     setActionLoading(posId);
+    const op = STELLAR_CONFIG.demoAccounts.operator;
     try {
-      await pausePosition(signerAddress, operatorAddress);
+      await pausePosition(signerAddress, op);
+      addEventLog('status', `[staker: GDL7...7U, status: Paused]`);
       await refresh();
     } catch (err: any) {
       const code = err instanceof ContractCallError ? err.message : '';
@@ -106,8 +114,10 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
 
   const handleResume = async (posId: string) => {
     setActionLoading(posId);
+    const op = STELLAR_CONFIG.demoAccounts.operator;
     try {
-      await resumePosition(signerAddress, operatorAddress);
+      await resumePosition(signerAddress, op);
+      addEventLog('status', `[staker: GDL7...7U, status: Active]`);
       await refresh();
     } catch (err: any) {
       const code = err instanceof ContractCallError ? err.message : '';
@@ -120,8 +130,10 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
 
   const handleTerminate = async (posId: string) => {
     setActionLoading(posId);
+    const op = STELLAR_CONFIG.demoAccounts.operator;
     try {
-      await terminatePosition(signerAddress, operatorAddress);
+      await terminatePosition(signerAddress, op);
+      addEventLog('status', `[staker: GDL7...7U, status: Terminated]`);
       await refresh();
     } catch (err: any) {
       const code = err instanceof ContractCallError ? err.message : '';
@@ -153,13 +165,13 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Overview Banner */}
-      <div className="p-8 bg-white border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-8 bg-white border border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] flex flex-col md:flex-row md:items-center justify-between gap-6 hover:shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] transition-all">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="p-2 bg-slate-100 text-slate-800 border border-slate-200">
+            <span className="p-2 bg-slate-100 text-slate-800 border border-slate-900">
               <Zap className="w-5 h-5 text-slate-900" />
             </span>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 font-mono">STAKING OVERVIEW</h2>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 font-mono">STAKING PORTAL</h2>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed max-w-xl font-sans">
             Monitor decentralized liquidity allocations, trigger yield aggregation events on-chain, or terminate locked portfolios.
@@ -167,10 +179,10 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
         </div>
         <button
           onClick={onExploreStrategies}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-950 hover:bg-slate-800 text-xs font-mono font-medium text-white transition-colors rounded-none shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-950 hover:bg-slate-800 text-xs font-mono font-medium text-white transition-colors rounded-none shrink-0 border border-slate-950"
         >
           <Plus className="w-4 h-4" />
-          <span>STAKE CAPITAL</span>
+          <span>STAKE NEW CAPITAL</span>
         </button>
       </div>
 
@@ -185,12 +197,8 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
           return (
             <div
               key={pos.id}
-              className={`p-8 bg-white border flex flex-col justify-between space-y-6 ${
-                isTerminated
-                  ? 'border-slate-100 opacity-60'
-                  : isPaused
-                  ? 'border-amber-200'
-                  : 'border-slate-200'
+              className={`p-8 fintech-card flex flex-col justify-between space-y-6 ${
+                isTerminated ? 'opacity-65' : ''
               }`}
             >
               {/* Header */}
@@ -280,7 +288,7 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
                       <button
                         onClick={() => handlePause(pos.id)}
                         disabled={actionLoading === pos.id}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-700 font-mono text-[11px] font-medium transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-mono text-[11px] font-bold transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]"
                       >
                         <Pause className="w-3.5 h-3.5" />
                         <span>PAUSE</span>
@@ -289,7 +297,7 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
                       <button
                         onClick={() => handleResume(pos.id)}
                         disabled={actionLoading === pos.id}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 font-mono text-[11px] font-medium transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-mono text-[11px] font-bold transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]"
                       >
                         <Play className="w-3.5 h-3.5" />
                         <span>RESUME</span>
@@ -299,7 +307,7 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
                     <button
                       onClick={() => handleTerminate(pos.id)}
                       disabled={actionLoading === pos.id}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 font-mono text-[11px] font-medium transition-colors"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-rose-700 font-mono text-[11px] font-bold transition-all shadow-[2px_2px_0px_0px_rgba(225,29,72,1)] hover:shadow-[3px_3px_0px_0px_rgba(225,29,72,1)]"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>UNSTAKE</span>
@@ -315,10 +323,19 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
             </div>
           );
         })}
+        {positions.length === 0 && (
+          <div className="col-span-2 p-12 text-center border border-dashed border-slate-300 bg-white space-y-4">
+            <HelpCircle className="w-8 h-8 mx-auto text-slate-400" />
+            <h3 className="font-mono text-sm font-bold text-slate-900">NO ACTIVE STAKING POSITIONS FOUND</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              You do not have any active allocations. Go to the Strategy Explorer to allocate liquidity into locked APY strategies.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* On-Chain Events Ledger Section */}
-      <div className="p-8 bg-white border border-slate-200 space-y-4">
+      <div className="p-8 bg-white border border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -329,7 +346,7 @@ export const StakingDashboard: React.FC<StakingDashboardProps> = ({
           </span>
         </div>
 
-        <div className="p-4 bg-slate-50 border border-slate-150 font-mono text-xs divide-y divide-slate-200/60 max-h-48 overflow-y-auto space-y-2">
+        <div className="p-4 bg-slate-50 border border-slate-200 font-mono text-xs divide-y divide-slate-200/60 max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
           {eventLogs.map((log) => (
             <div key={log.id} className="pt-2 flex items-start gap-4">
               <span className="text-slate-400 shrink-0">{log.time}</span>
@@ -392,11 +409,12 @@ export const LiveYieldTicker: React.FC<TickerProps> = ({
   }, [principal, apyBps, lastCheckpoint, isPaused]);
 
   return (
-    <div className="p-5 border border-emerald-100 bg-emerald-50/20 flex flex-col items-start gap-1">
-      <span className="text-[9px] font-mono text-emerald-700 font-bold uppercase tracking-widest">
+    <div className="p-5 border border-emerald-950/20 bg-emerald-50/10 flex flex-col items-start gap-1">
+      <span className="text-[9px] font-mono text-emerald-800 font-bold uppercase tracking-widest flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
         Accruing Yield (syUSD)
       </span>
-      <span className="text-3xl font-mono font-bold tracking-tight text-emerald-800 leading-none">
+      <span className="text-3xl font-mono font-bold tracking-tight text-emerald-900 leading-none">
         {accrued.toFixed(8)}
       </span>
     </div>

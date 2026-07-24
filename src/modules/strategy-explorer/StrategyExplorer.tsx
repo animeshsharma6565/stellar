@@ -1,17 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Layers, Plus, ArrowRight, CheckCircle, Clock, X } from 'lucide-react';
-import { STELLAR_CONFIG } from '@/config/contracts';
+import { Layers, Plus, Clock, CheckCircle, ArrowRight, X } from 'lucide-react';
+import { getStrategies, registerStrategy, approveVaultAllowance, initiateStaking, ContractCallError } from '@/utils/sorobanClient';
 import { ErrorType } from '@/core/handlers/ErrorModal';
 import { StakingStrategy } from '@/types';
-import {
-  fetchStrategy,
-  approveVaultAllowance,
-  initiateStaking,
-  registerStrategy,
-  ContractCallError,
-} from '@/utils/sorobanClient';
 
 interface StrategyExplorerProps {
   currentAddress: string | null;
@@ -19,37 +12,16 @@ interface StrategyExplorerProps {
   onSubscribed: () => void;
 }
 
-const DESCRIPTIONS: Record<number, { description: string; features: string[] }> = {
+const STATIC_METADATA: Record<number, { description: string; features: string[] }> = {
   1: {
-    description: 'High frequency testnet yield strategy with a 60-second checkpoint maturity.',
-    features: [
-      'Maturity interval: 60s rapid testing',
-      'Direct smart contract authorization',
-      'Pause & resume mechanisms',
-      'Instant liquidity settlement',
-    ],
+    description: 'Direct yield pools utilizing stable rate arbitrage protocols on Stellar Network.',
+    features: ['8.00% Target APY', 'Continuous Accruals', 'Low slippage checkpoint lockups']
   },
   2: {
-    description: 'Medium duration stable liquidity aggregation vault paying yield in syUSD.',
-    features: [
-      'Maturity interval: 300s testing cycle',
-      'Verified on-chain receipt logs',
-      'Non-custodial vault mechanics',
-      'Automatic checkpoint compounding',
-    ],
-  },
-  3: {
-    description: 'Long-term enterprise-grade yield aggregator running on Soroban.',
-    features: [
-      'Maturity interval: 1-hour locked cycles',
-      'Priority execution queue routing',
-      'Decentralized accounting audits',
-      'Zero admin platform lock-in',
-    ],
-  },
+    description: 'High APY vault optimization strategies utilizing compound automated liquidity routing.',
+    features: ['12.00% Target APY', 'Auto-compounding simulators', 'Premium liquidity provisions']
+  }
 };
-
-const KNOWN_STRATEGY_IDS = [1, 2, 3];
 
 export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
   currentAddress,
@@ -57,34 +29,42 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
   onSubscribed,
 }) => {
   const [strategies, setStrategies] = useState<StakingStrategy[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  
+  // Staking state
+  const [stakeAmount, setStakeAmount] = useState<string>('500');
   const [subscribingId, setSubscribingId] = useState<number | null>(null);
-  const [stakeAmount, setStakeAmount] = useState<string>('100');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newApy, setNewApy] = useState('10'); // 10%
-  const [newLockup, setNewLockup] = useState('60'); // 60s
-  const [registering, setRegistering] = useState(false);
 
-  const operatorAddress = STELLAR_CONFIG.demoAccounts.operator;
+  // Form registration state
+  const [newName, setNewName] = useState<string>('');
+  const [newApy, setNewApy] = useState<string>('10');
+  const [newLockup, setNewLockup] = useState<string>('60');
+  const [registering, setRegistering] = useState<boolean>(false);
 
   const refresh = useCallback(async () => {
-    const loaded: StakingStrategy[] = [];
-    for (const id of KNOWN_STRATEGY_IDS) {
-      const onChain = await fetchStrategy(operatorAddress, id);
-      if (onChain && onChain.active) {
-        loaded.push({
-          id,
-          name: onChain.name,
-          operator: onChain.operator,
-          apyBps: onChain.apy_bps,
-          lockupSeconds: Number(onChain.lockup_seconds),
-          description: DESCRIPTIONS[id]?.description ?? 'On-chain yield strategy registered via YieldPoolManager.',
-          features: DESCRIPTIONS[id]?.features ?? ['Registered live on Stellar Testnet'],
-        });
-      }
+    try {
+      const data = await getStrategies();
+      const mapped = data.map((d: any) => {
+        const meta = STATIC_METADATA[d.strategy_id] ?? {
+          description: 'Custom on-chain yield staking vault template.',
+          features: [`${(d.apy_bps / 100).toFixed(2)}% Target APY`, 'Secured locks', 'Operator controlled distributions']
+        };
+        return {
+          id: d.strategy_id,
+          name: d.name,
+          description: meta.description,
+          apyBps: d.apy_bps,
+          lockupSeconds: d.lockup_seconds,
+          operator: d.operator,
+          active: d.active,
+          features: meta.features
+        };
+      });
+      setStrategies(mapped);
+    } catch (err) {
+      console.error('Failed to load strategies:', err);
     }
-    setStrategies(loaded);
-  }, [operatorAddress]);
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -146,13 +126,13 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Banner */}
-      <div className="p-8 bg-white border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-8 bg-white border border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] flex flex-col md:flex-row md:items-center justify-between gap-6 hover:shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] transition-all">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="p-2 bg-slate-100 border border-slate-200">
+            <span className="p-2 bg-slate-100 border border-slate-900">
               <Layers className="w-5 h-5 text-slate-800" />
             </span>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 font-mono">YIELD STRATEGY EXPLORER</h2>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 font-mono">STRATEGY EXPLORER</h2>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed max-w-xl font-sans">
             Discover on-chain staking strategies, subscribe to yield pools, or register custom strategy templates.
@@ -160,7 +140,7 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-950 hover:bg-slate-800 text-xs font-mono font-medium text-white transition-colors rounded-none shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-950 hover:bg-slate-800 text-xs font-mono font-medium text-white transition-colors rounded-none shrink-0 border border-slate-950"
         >
           <Plus className="w-4 h-4" />
           <span>REGISTER STRATEGY</span>
@@ -172,7 +152,7 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
         {strategies.map((strat) => (
           <div
             key={strat.id}
-            className="p-8 bg-white border border-slate-200 flex flex-col justify-between space-y-6"
+            className="p-8 fintech-card flex flex-col justify-between space-y-6"
           >
             <div className="space-y-4">
               <div>
@@ -198,7 +178,7 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
                 <ul className="space-y-2">
                   {strat.features.map((feat, idx) => (
                     <li key={idx} className="flex items-start gap-2 text-xs text-slate-600">
-                      <CheckCircle className="w-4 h-4 text-slate-800 shrink-0 mt-0.5" />
+                      <CheckCircle className="w-4 h-4 text-slate-900 shrink-0 mt-0.5" />
                       <span>{feat}</span>
                     </li>
                   ))}
@@ -212,12 +192,12 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
                 value={stakeAmount}
                 onChange={(e) => setStakeAmount(e.target.value)}
                 placeholder="Amount syUSD"
-                className="w-full px-3 py-2 border border-slate-200 focus:outline-none focus:border-slate-800 text-xs font-mono text-slate-800 bg-white"
+                className="w-full px-3 py-2 border border-slate-900 focus:outline-none focus:bg-slate-50 text-xs font-mono text-slate-800 bg-white"
               />
               <button
                 onClick={() => handleSubscribe(strat)}
                 disabled={subscribingId === strat.id}
-                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]"
               >
                 <span>{subscribingId === strat.id ? 'AUTHORIZING...' : 'STAKE INTO POOL'}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -235,8 +215,8 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
 
       {/* Register Strategy Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-xs">
-          <div className="w-full max-w-md p-8 bg-white border border-slate-200 shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="w-full max-w-md p-8 bg-white border border-slate-900 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 font-mono">REGISTER YIELD STRATEGY</h3>
               <button
@@ -257,7 +237,7 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g. DeFi Vault Alpha"
-                  className="w-full px-3 py-2 border border-slate-200 focus:outline-none focus:border-slate-800 text-slate-800 bg-white"
+                  className="w-full px-3 py-2 border border-slate-900 focus:outline-none focus:bg-slate-50 text-slate-800 bg-white"
                 />
               </div>
 
@@ -269,7 +249,7 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
                     required
                     value={newApy}
                     onChange={(e) => setNewApy(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 focus:outline-none focus:border-slate-800 text-slate-800 bg-white"
+                    className="w-full px-3 py-2 border border-slate-900 focus:outline-none focus:bg-slate-50 text-slate-800 bg-white"
                   />
                 </div>
 
@@ -280,7 +260,7 @@ export const StrategyExplorer: React.FC<StrategyExplorerProps> = ({
                     required
                     value={newLockup}
                     onChange={(e) => setNewLockup(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 focus:outline-none focus:border-slate-800 text-slate-800 bg-white"
+                    className="w-full px-3 py-2 border border-slate-900 focus:outline-none focus:bg-slate-50 text-slate-800 bg-white"
                   />
                 </div>
               </div>

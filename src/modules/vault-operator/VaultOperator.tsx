@@ -1,92 +1,77 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Vault, TrendingUp, Download, Zap, Users, CheckCircle, ExternalLink, Clock, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Vault, ShieldCheck, Download, Users, CheckCircle, Clock, ExternalLink, Zap, TrendingUp } from 'lucide-react';
 import { STELLAR_CONFIG } from '@/config/contracts';
+import { getVaultBalance, getTotalYieldAggregated, getPosition, runCheckpoint, operatorWithdraw, ContractCallError } from '@/utils/sorobanClient';
 import { ErrorType } from '@/core/handlers/ErrorModal';
-import {
-  fetchVaultBalance,
-  fetchTotalYieldAggregated,
-  fetchPosition,
-  runCheckpoint,
-  operatorWithdraw,
-  ContractCallError,
-} from '@/utils/sorobanClient';
-
-interface DepositorRow {
-  stakerAddress: string;
-  strategyName: string;
-  amount: number;
-  lockupSeconds: number;
-  lastCheckpointTimestamp: number;
-  status: 'Active' | 'Paused' | 'Terminated';
-}
+import { DepositorPositionRecord } from '@/types';
 
 interface VaultOperatorProps {
-  currentAddress: string | null;
+  signerAddress: string;
   onError: (type: ErrorType, msg?: string) => void;
 }
 
-const TRACKED_STAKERS = [STELLAR_CONFIG.demoAccounts.staker];
-const STRATEGY_NAMES: Record<number, string> = {
-  1: 'DeFi Alpha Pool',
-  2: 'Stellar Liquid Vault',
-  3: 'Global Yield Core',
-};
-
 export const VaultOperator: React.FC<VaultOperatorProps> = ({
-  currentAddress,
+  signerAddress,
   onError,
 }) => {
   const [vaultBalance, setVaultBalance] = useState<number>(0);
   const [totalYieldAggregated, setTotalYieldAggregated] = useState<number>(0);
-  const [withdrawAmount, setWithdrawAmount] = useState<string>('500');
+  const [depositors, setDepositors] = useState<DepositorPositionRecord[]>([]);
+
+  const [withdrawAmount, setWithdrawAmount] = useState<string>('100');
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
-  const [depositors, setDepositors] = useState<DepositorRow[]>([]);
-
-  // On-chain state (strategies, positions, vault balances) is seeded under the fixed operator
-  // demo identity for this testnet build, so reads always target that address regardless of
-  // which wallet is connected. Writes below sign with whichever wallet is actually connected —
-  // Soroban's require_auth() will correctly reject a signer that isn't the real operator.
-  const operatorAddress = STELLAR_CONFIG.demoAccounts.operator;
-  const signerAddress = currentAddress || STELLAR_CONFIG.demoAccounts.operator;
+  const [now, setNow] = useState<number>(Math.floor(Date.now() / 1000));
 
   const refresh = useCallback(async () => {
-    const [balance, totalYield] = await Promise.all([
-      fetchVaultBalance(operatorAddress),
-      fetchTotalYieldAggregated(operatorAddress),
-    ]);
-    setVaultBalance(balance);
-    setTotalYieldAggregated(totalYield);
+    try {
+      const bal = await getVaultBalance();
+      const tot = await getTotalYieldAggregated();
+      setVaultBalance(bal);
+      setTotalYieldAggregated(tot);
 
-    const rows: DepositorRow[] = [];
-    for (const stakerAddr of TRACKED_STAKERS) {
-      const pos = await fetchPosition(stakerAddr, operatorAddress);
+      // Read active positions
+      const staker = STELLAR_CONFIG.demoAccounts.staker;
+      const pos = await getPosition(staker, signerAddress);
+      
+      const loaded: DepositorPositionRecord[] = [];
       if (pos) {
-        rows.push({
-          stakerAddress: stakerAddr,
-          strategyName: STRATEGY_NAMES[pos.strategy_id] ?? `Strategy #${pos.strategy_id}`,
-          amount: Number(pos.principal_amount) / 10 ** STELLAR_CONFIG.tokenDecimals,
+        loaded.push({
+          stakerAddress: staker,
+          strategyName: 'DeFi Alpha Pool',
+          amount: Number(pos.principal_amount),
           lockupSeconds: Number(pos.min_duration),
           lastCheckpointTimestamp: Number(pos.last_checkpoint_timestamp),
-          status: (pos.status?.tag ?? 'Active') as DepositorRow['status'],
         });
       }
+      setDepositors(loaded);
+    } catch (err) {
+      console.error('Failed to reload operator stats:', err);
     }
-    setDepositors(rows);
-  }, [operatorAddress]);
+  }, [signerAddress]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const now = Math.floor(Date.now() / 1000);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Math.floor(Date.now() / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const handleCheckpoint = async (stakerAddr: string, amount: number, lockup: number, lastCheckpoint: number) => {
-    const isDue = lastCheckpoint === 0 || now >= lastCheckpoint + lockup;
-    if (!isDue) {
-      onError('CYCLE_NOT_DUE', `Lockup period not matured for ${stakerAddr.slice(0, 6)}... Next checkpoint available in ${lastCheckpoint + lockup - now}s.`);
+  const handleCheckpoint = async (
+    stakerAddr: string,
+    amount: number,
+    lockup: number,
+    lastCheckpoint: number
+  ) => {
+    const nextDue = lastCheckpoint + lockup;
+    if (lastCheckpoint > 0 && now < nextDue) {
+      onError('CYCLE_NOT_DUE');
       return;
     }
 
@@ -135,19 +120,19 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header Banner */}
-      <div className="p-8 bg-white border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-8 bg-white border border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] flex flex-col md:flex-row md:items-center justify-between gap-6 hover:shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] transition-all">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="p-2 bg-slate-100 border border-slate-200">
+            <span className="p-2 bg-slate-100 border border-slate-900">
               <Vault className="w-5 h-5 text-slate-900" />
             </span>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 font-mono">OPERATOR LIQUIDITY VAULT</h2>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 font-mono">OPERATOR CONSOLE</h2>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed max-w-xl font-sans">
             Oversee accumulated pool yields, invoke linear reward checkpoints, and execute contract asset withdrawals.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-500 bg-slate-50 p-3 border border-slate-200">
+        <div className="flex items-center gap-2 text-xs font-mono text-slate-600 bg-slate-50 p-3 border border-slate-200">
           <ShieldCheck className="w-4 h-4 text-emerald-600 animate-pulse" />
           <span>Vault Contract: {truncate(STELLAR_CONFIG.contracts.liquidityVault)}</span>
         </div>
@@ -156,7 +141,7 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Metric 1 */}
-        <div className="p-8 bg-white border border-slate-200 space-y-4">
+        <div className="p-8 fintech-card space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">
               Total Yield Aggregated
@@ -174,7 +159,7 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
         </div>
 
         {/* Metric 2 */}
-        <div className="p-8 bg-white border border-slate-200 space-y-4">
+        <div className="p-8 fintech-card space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">
               Active Vault Balance
@@ -192,7 +177,7 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
         </div>
 
         {/* Metric 3 */}
-        <div className="p-8 bg-white border border-slate-200 space-y-4">
+        <div className="p-8 fintech-card space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">
               Withdraw Liquid Assets
@@ -207,12 +192,12 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder="Amount syUSD"
-              className="w-full px-3 py-2 border border-slate-200 focus:outline-none focus:border-slate-800 text-sm font-mono text-slate-800 bg-white"
+              className="w-full px-3 py-2 border border-slate-900 focus:outline-none focus:bg-slate-50 text-sm font-mono text-slate-800 bg-white"
             />
             <button
               onClick={handleWithdraw}
               disabled={loadingAction === 'withdraw'}
-              className="px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-colors shrink-0"
+              className="px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-mono text-xs transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] shrink-0"
             >
               {loadingAction === 'withdraw' ? 'WAITING...' : 'WITHDRAW'}
             </button>
@@ -221,7 +206,7 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
       </div>
 
       {/* Depositors Table */}
-      <div className="p-8 bg-white border border-slate-200 space-y-6">
+      <div className="p-8 bg-white border border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-slate-900" />
@@ -287,9 +272,9 @@ export const VaultOperator: React.FC<VaultOperatorProps> = ({
                           )
                         }
                         disabled={loadingAction === `collect-${dep.stakerAddress}`}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] font-bold uppercase transition-colors ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] font-bold uppercase transition-all ${
                           isDue
-                            ? 'bg-slate-950 text-white hover:bg-slate-800'
+                            ? 'bg-slate-950 text-white hover:bg-slate-800 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]'
                             : 'bg-slate-100 text-slate-400 border border-slate-200'
                         }`}
                       >

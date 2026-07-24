@@ -70,17 +70,17 @@ export default function Home() {
       {/* Main Content Body */}
       <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1">
         {/* Error Simulation Helper Ribbon */}
-        <div className="mb-8 p-5 bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
+        <div className="mb-8 p-5 bg-white border border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
           <div className="flex items-center gap-2 text-slate-500">
-            <Sparkles className="w-4 h-4 text-slate-600 animate-pulse" />
+            <Sparkles className="w-4 h-4 text-slate-900 animate-pulse" />
             <span className="font-bold text-slate-800">SIMULATOR CONTROLS:</span>
-            <span className="hidden md:inline">Test required Level 3 client-side exception states</span>
+            <span className="hidden lg:inline text-slate-400">Test required Level 3 client-side exception states</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => triggerError('NO_WALLET')}
-              className="px-3 py-1.5 border border-amber-200 bg-amber-50/50 hover:bg-amber-50 text-amber-700 font-bold transition-colors"
+              className="px-3 py-1.5 border border-slate-900 bg-white hover:bg-slate-50 text-slate-900 font-bold transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] text-[10px]"
             >
               Missing Wallet
             </button>
@@ -88,7 +88,7 @@ export default function Home() {
               onClick={() =>
                 triggerError('SIGNATURE_REJECTED', 'Freighter Wallet transaction signing rejected by keysigner.')
               }
-              className="px-3 py-1.5 border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 font-bold transition-colors"
+              className="px-3 py-1.5 border border-slate-900 bg-white hover:bg-slate-50 text-slate-900 font-bold transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] text-[10px]"
             >
               Rejected Signature
             </button>
@@ -99,7 +99,7 @@ export default function Home() {
                   'Vesting checkpoint timestamp criteria not met: Maturity expected in 14m 20s.'
                 )
               }
-              className="px-3 py-1.5 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold transition-colors"
+              className="px-3 py-1.5 border border-slate-900 bg-white hover:bg-slate-50 text-slate-900 font-bold transition-all shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] text-[10px]"
             >
               Unexpired Lockup
             </button>
@@ -109,14 +109,14 @@ export default function Home() {
         {/* Dynamic View rendering */}
         {activeRole === 'staker' && (
           <StakingDashboard
-            currentAddress={currentAddress}
+            signerAddress={currentAddress || ''}
             onError={triggerError}
             onExploreStrategies={() => setActiveRole('explorer')}
           />
         )}
 
         {activeRole === 'operator' && (
-          <VaultOperator currentAddress={currentAddress} onError={triggerError} />
+          <VaultOperator signerAddress={currentAddress || ''} onError={triggerError} />
         )}
 
         {activeRole === 'explorer' && (

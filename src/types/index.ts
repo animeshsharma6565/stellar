@@ -25,3 +25,11 @@ export interface LiquidityVaultState {
   totalYieldAggregated: number;
   activeStakersCount: number;
 }
+
+export interface DepositorPositionRecord {
+  stakerAddress: string;
+  strategyName: string;
+  amount: number;
+  lockupSeconds: number;
+  lastCheckpointTimestamp: number;
+}
